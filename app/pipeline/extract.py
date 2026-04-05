@@ -8,7 +8,21 @@ from pypdf import PdfReader
 logger = logging.getLogger(__name__)
 DATA_DIR = "/app/data"
 DB_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DB_URL)
+
+# Create engine lazily to avoid import-time errors
+_engine = None
+
+def get_engine():
+    """Get SQLAlchemy engine, creating it if necessary."""
+    global _engine
+    if _engine is None:
+        if not DB_URL:
+            raise RuntimeError(
+                "DATABASE_URL environment variable not set. "
+                "Please set it in your .env file or docker-compose environment."
+            )
+        _engine = create_engine(DB_URL)
+    return _engine
 
 def extract_pdf_to_jsonl(pdf_path, output_file, doc_category="chinh_sach"):
     print(f"Đang phân tích PDF: {pdf_path}")
@@ -53,6 +67,7 @@ def extract_products_to_jsonl(output_file: str):
     logger.info(f"Đang kết nối MySQL tại để trích xuất dữ liệu...")
 
     try:
+        engine = get_engine()
         with engine.connect() as conn:
             query = text("""
                 SELECT product_id, name, description, category, price 

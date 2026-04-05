@@ -8,3 +8,5 @@ sqlalchemy
 pymysql
 pydantic-settings
 langchain-text-splitters
+celery
+redis
