@@ -105,7 +105,7 @@ def analyze_user_query(query: str) -> dict:
     Dùng LLM để phân tích câu hỏi tự nhiên thành các bộ lọc có cấu trúc.
     """
     analyzer_prompt = """Bạn là chuyên gia trích xuất dữ liệu. Hãy đọc câu hỏi và trả về ĐÚNG 1 ĐỊNH DẠNG JSON.
-        1. "category": "dien_tu" (điện thoại, tai nghe...), "thoi_trang" (quần áo, balo...), hoặc null nếu không rõ.
+        1. "category": "Phones" (điện thoại), "Accessories" (quần áo, balo, tai nghe...), "Electronics"(máy tính bảng, điện tử) hoặc null nếu không rõ.
         2. "max_price": CHÚ Ý - Phải dịch các từ chỉ tiền tệ sang số nguyên VNĐ.
         - Ví dụ: "10 triệu", "10 củ" -> 10000000
         - Ví dụ: "500k", "500 cành" -> 500000

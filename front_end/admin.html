@@ -462,11 +462,11 @@
             </div>
             <div class="stat-card">
                 <div class="stat-label">Giá trung bình</div>
-                <div class="stat-value" id="stat-avg-price">$0</div>
+                <div class="stat-value" id="stat-avg-price">0 ₫</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Tổng giá</div>
-                <div class="stat-value" id="stat-total-price">$0</div>
+                <div class="stat-value" id="stat-total-price">0 ₫</div>
             </div>
         </div>
 
@@ -526,7 +526,7 @@
                         <label class="form-label">Danh mục *</label>
                         <select class="form-select" id="product-category" required>
                             <option value="">-- Chọn danh mục --</option>
-                            <option value="Electronics">{{$t('Electronics')|ngPluralize}}</option>
+                            <option value="Electronics">Điện tử</option>
                             <option value="Laptops">Laptops</option>
                             <option value="Phones">Điện thoại</option>
                             <option value="Accessories">Phụ kiện</option>
@@ -535,8 +535,8 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Giá (USD) *</label>
-                        <input type="number" class="form-input" id="product-price" placeholder="VD: 999.99" step="0.01"
+                        <label class="form-label">Giá (VND) *</label>
+                        <input type="number" class="form-input" id="product-price" placeholder="VD: 7690000" step="1"
                             min="0" required>
                     </div>
 
@@ -556,13 +556,36 @@
     </div>
 
     <script>
-        // API Configuration
-        const API_BASE = 'http://localhost:8080/api';
+        // API Configuration - Auto-detect or use localhost
+        const getAPIBase = () => {
+            // If running via Docker or specified port
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return `http://${window.location.hostname}:8080/api`;
+            }
+            // Fallback to localhost
+            return 'http://localhost:8080/api';
+        };
+
+        const API_BASE = getAPIBase();
         let editingProductId = null;
         let allProducts = [];
 
+        // Format price to Vietnamese Dong format (VND)
+        function formatVND(value) {
+            // Convert to number if string
+            const numValue = typeof value === 'string' ? parseFloat(value) : value;
+
+            // Format with thousand separators (periods)
+            return new Intl.NumberFormat('de-DE', {
+                style: 'decimal',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(Math.round(numValue)) + ' ₫';
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('API Base URL:', API_BASE);
             loadProducts();
             checkConnection();
             setInterval(checkConnection, 5000);
@@ -582,10 +605,16 @@
         // Check API Connection
         function checkConnection() {
             const statusEl = document.getElementById('sync-status');
-            fetch(API_BASE + '/chat', { method: 'OPTIONS' })
-                .then(() => {
-                    statusEl.textContent = '● Đang kết nối';
-                    statusEl.style.color = 'var(--success)';
+            // Use GET to health check endpoint instead of OPTIONS
+            fetch(API_BASE + '/products?limit=1', { method: 'GET' })
+                .then(response => {
+                    if (response.ok || response.status === 404) {
+                        statusEl.textContent = '● Đang kết nối';
+                        statusEl.style.color = 'var(--success)';
+                    } else {
+                        statusEl.textContent = '● Chế độ ngoại tuyến';
+                        statusEl.style.color = 'var(--danger)';
+                    }
                 })
                 .catch(() => {
                     statusEl.textContent = '● Chế độ ngoại tuyến';
@@ -644,7 +673,7 @@
                     <td>#${p.product_id}</td>
                     <td><span class="product-name">${escapeHtml(p.name)}</span></td>
                     <td><span class="product-category">${p.category}</span></td>
-                    <td><span class="product-price">$${p.price.toFixed(2)}</span></td>
+                    <td><span class="product-price">${formatVND(p.price)}</span></td>
                     <td>
                         <div class="actions">
                             <button class="btn-edit" onclick="editProduct(${p.product_id})">✏️ Sửa</button>
@@ -683,7 +712,7 @@
                     <td>#${p.product_id}</td>
                     <td><span class="product-name">${escapeHtml(p.name)}</span></td>
                     <td><span class="product-category">${p.category}</span></td>
-                    <td><span class="product-price">$${p.price.toFixed(2)}</span></td>
+                    <td><span class="product-price">${formatVND(p.price)}</span></td>
                     <td>
                         <div class="actions">
                             <button class="btn-edit" onclick="editProduct(${p.product_id})">✏️ Sửa</button>
@@ -840,8 +869,8 @@
 
             document.getElementById('stat-total').textContent = total;
             document.getElementById('stat-categories').textContent = categories;
-            document.getElementById('stat-avg-price').textContent = `$${avgPrice.toFixed(2)}`;
-            document.getElementById('stat-total-price').textContent = `$${totalPrice.toFixed(2)}`;
+            document.getElementById('stat-avg-price').textContent = formatVND(avgPrice);
+            document.getElementById('stat-total-price').textContent = formatVND(totalPrice);
         }
 
         // Escape HTML

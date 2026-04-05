@@ -10,3 +10,4 @@ pydantic-settings
 langchain-text-splitters
 celery
 redis
+cryptography
