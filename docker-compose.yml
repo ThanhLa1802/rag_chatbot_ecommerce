@@ -2,50 +2,21 @@ version: '3.8'
 
 services:
   rag_api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     container_name: rag_api_service
-    ports:
-      - "8080:8080"
+    ports: 
+      - "8081:8080"
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_URL=${DATABASE_URL} 
-      - QDRANT_URL=http://qdrant_db:6333
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - ./data:/app/data
-      - ./app:/app/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
     depends_on:
-      - qdrant_db
-      - redis
       - mysql_db
-    restart: unless-stopped
-    networks:
-      - backend
-
-  qdrant_db:
-    image: qdrant/qdrant:latest
-    container_name: qdrant_vector_db
-    ports:
-      - "6333:6333" # Port REST API
-      - "6334:6334" # Port gRPC (nếu dùng)
-    volumes:
-      - qdrant_storage:/qdrant/storage
-    restart: unless-stopped
-    networks:
-      - backend
-
-  
-  redis:
-    image: redis:7-alpine
-    container_name: redis_cache
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
+      - qdrant_db
     restart: unless-stopped
     networks:
       - backend
@@ -65,32 +36,21 @@ services:
     restart: unless-stopped
     networks:
       - backend
-
-  celery_worker:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    container_name: celery_worker_service
-    command: celery -A app.worker.celery_app worker --loglevel=info
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-      - QDRANT_URL=http://qdrant_db:6333
+  qdrant_db:
+    image: qdrant/qdrant:latest
+    container_name: qdrant_vector_db
+    ports:
+      - "6333:6333" # Port REST API
+      - "6334:6334" # Port gRPC (nếu dùng)
     volumes:
-      - ./app:/app/app
-    depends_on:
-      - redis
-      - mysql_db
-      - qdrant_db
+      - qdrant_storage:/qdrant/storage
     restart: unless-stopped
     networks:
       - backend
 
-
 volumes:
-  qdrant_storage:
   mysql_data:
-  redis_data:
+  qdrant_storage:
 
 networks:
   backend:
