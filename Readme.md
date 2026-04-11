@@ -52,25 +52,25 @@ Dự án sử dụng kiến trúc **Microservices**, đóng gói bằng **Docker
 
 ---
 
-## 🔄 Luồng dữ liệu chính (RAG Flow)
+## 🔄 Main Data Flow (RAG Pipeline)
 
-### 1. Extract (PDF ETL)
-- Dùng `pdfplumber` để extract text tiếng Việt  
-- Chunking bằng Recursive strategy  
-- Generate embedding (OpenAI)
+### 1. Extract (ETL)
+- Use `pdfplumber` to extract Vietnamese text from PDF policies
+- Apply recursive chunking to split documents while preserving context
+- Generate embeddings using OpenAI API
 
 ### 2. Load
-- Product data → từ MySQL  
-- Policy data → từ PDF  
-- Lưu vào Qdrant với các type khác nhau
+- Product data: Loaded from MySQL
+- Policy data: Loaded from PDF
+- Store both types in Qdrant (vector database) with appropriate tags
 
 ### 3. Chat Flow
 
 ```mermaid
 flowchart LR
-    A[User Question] --> B[FastAPI]
-    B --> C[OpenAI Embedding]
+    A[User Question] --> B[FastAPI API Layer]
+    B --> C[OpenAI Embedding Generation]
     C --> D[Qdrant Hybrid Search]
-    D --> E[RAG Logic]
-    E --> F[OpenAI LLM]
+    D --> E[RAG Logic & Context Assembly]
+    E --> F[OpenAI LLM Generation]
     F --> G[Streaming Response to UI]

@@ -12,6 +12,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=${DATABASE_URL} 
       - QDRANT_URL=http://qdrant_db:6333
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./data:/app/data
       - ./app:/app/app

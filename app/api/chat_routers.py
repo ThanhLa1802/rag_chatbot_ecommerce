@@ -6,13 +6,14 @@ import uuid
 
 # Import hàm sinh câu trả lời từ tầng Service mà ta vừa viết
 from app.services.rag_service import generate_answer_stream, analyze_user_query
-from app.services.window_memory import get_window_memory
+from app.services.window_memory import get_window_memory, get_search_cache
 from app.schemas.chat_schema import ChatRequest
 
 logger = logging.getLogger(__name__)
 
-# Initialize window memory
+# Initialize window memory and search cache
 window_memory = get_window_memory()
+search_cache = get_search_cache()
 
 # init router
 router = APIRouter()
@@ -51,26 +52,37 @@ async def chat_with_bot(
         
         filters = analyze_user_query(request.query)
         
-        # Create enhanced prompt with conversation context
-        enhanced_prompt = f"""Conversation Context:
+        # Create enhanced prompt with conversation context for LLM understanding
+        conversation_context = f"""Conversation Context:
                 {conversation_history}
                 Current Query: {request.query}
                 Vui lòng trả lời dựa trên ngữ cảnh hội thoại và áp dụng các bộ lọc"""
         
+        # Use ORIGINAL query for cache lookups (not the enhanced prompt)
+        # This ensures same questions get cache hits
         answer_generator = generate_answer_stream(
-            query=enhanced_prompt,
+            query=request.query,
+            conversation_context=conversation_context,
             category=filters.get("category"),
             max_price=filters.get("max_price")
         )
+        logger.info(f"Stream generator created for session {session_id}")
         
         # Generator wrapper to capture response and store in memory
         async def response_generator():
             full_response = ""
+            chunk_count = 0
             try:
+                logger.info(f"📤 Starting response streaming for session {session_id}...")
                 # Convert sync generator to async
                 for chunk in answer_generator:
                     full_response += chunk
+                    chunk_count += 1
+                    if chunk_count % 20 == 0:
+                        logger.debug(f"   Streamed {chunk_count} chunks ({len(full_response)} chars)...")
                     yield chunk
+                
+                logger.info(f"✅ Response streaming complete: {chunk_count} chunks, {len(full_response)} chars")
                 
                 # Store assistant response in window memory
                 window_memory.add_message(
@@ -82,7 +94,7 @@ async def chat_with_bot(
                 logger.info(f"Session {session_id}: Assistant response stored in window memory")
                 
             except Exception as e:
-                logger.error(f"Error in response generator: {e}")
+                logger.error(f"Error in response generator for session {session_id}: {e}", exc_info=True)
                 raise
         
         return StreamingResponse(
@@ -103,7 +115,7 @@ async def get_chat_history(session_id: str):
     try:
         messages = window_memory.get_conversation_window(session_id)
         stats = window_memory.get_session_stats(session_id)
-        
+        print(f"Session {session_id} history retrieved with {len(messages)} messages.")
         return {
             "session_id": session_id,
             "messages": messages,
@@ -146,3 +158,56 @@ async def check_window_memory_health():
     except Exception as e:
         logger.error(f"Error checking window memory health: {e}")
         raise HTTPException(status_code=500, detail="Error checking health")
+
+
+# Semantic Search Cache Endpoints
+@router.get("/search-cache/stats", summary="Get semantic search cache statistics")
+async def get_search_cache_stats():
+    """Get statistics about the semantic search cache."""
+    try:
+        stats = search_cache.get_cache_stats()
+        is_healthy = search_cache.health_check()
+        
+        return {
+            "status": "healthy" if is_healthy else "unhealthy",
+            "redis_connected": is_healthy,
+            **stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {e}")
+        raise HTTPException(status_code=500, detail="Error getting cache stats")
+
+
+@router.delete("/search-cache/clear", summary="Clear all semantic search cache")
+async def clear_search_cache():
+    """Clear all entries from the semantic search cache."""
+    try:
+        deleted_count = search_cache.clear_search_cache()
+        
+        return {
+            "status": "success",
+            "message": f"Cleared {deleted_count} cache entries",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        logger.error(f"Error clearing search cache: {e}")
+        raise HTTPException(status_code=500, detail="Error clearing search cache")
+
+
+@router.get("/search-cache/health", summary="Check semantic search cache health")
+async def check_search_cache_health():
+    """Check the health of the semantic search cache."""
+    try:
+        is_healthy = search_cache.health_check()
+        stats = search_cache.get_cache_stats()
+        
+        return {
+            "status": "healthy" if is_healthy else "unhealthy",
+            "redis_connected": is_healthy,
+            "cached_queries": stats.get("cached_queries", 0),
+            "cached_embeddings": stats.get("cached_embeddings", 0),
+            "total_hits": stats.get("total_hits", 0)
+        }
+    except Exception as e:
+        logger.error(f"Error checking search cache health: {e}")
+        raise HTTPException(status_code=500, detail="Error checking cache health")
