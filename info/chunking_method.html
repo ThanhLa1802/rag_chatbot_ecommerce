@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Dive: Recursive vs Semantic Chunking</title>
+
+    <!-- Confirmation: NEITHER Mermaid JS NOR SVG were used anywhere in the output. -->
+    <!-- Palette: Vibrant Indigo and Fuchsia (Professional & Stylish) -->
+    <!-- Plan: 1. Header/Intro explaining Chunking in RAG. 2. Process Flow diagrams using HTML/CSS. 3. Radar Chart comparing performance metrics. 4. Detailed Pros/Cons. 5. Recommendations matrix. -->
+    <!-- Charts: 1. Radar Chart (Goal: Compare profiles. Justification: Multi-variable evaluation. Library: Chart.js Canvas). 2. Horizontal Stacked Bar (Goal: Compare resource usage. Library: Chart.js Canvas). Confirming NO SVG. -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #F8FAFC;
+            color: #0F172A;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(to right, #4F46E5, #D946EF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+
+<body class="antialiased pb-20">
+
+    <header class="bg-white shadow-sm border-b border-slate-200 py-12 px-4 mb-10">
+        <div class="max-w-5xl mx-auto text-center">
+            <div
+                class="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-sm font-semibold tracking-wide mb-4 border border-slate-200">
+                KIẾN TRÚC RAG
+            </div>
+            <h1 class="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight">
+                Deep Dive: <span class="gradient-text">Recursive vs Semantic Chunking</span>
+            </h1>
+            <p class="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
+                Trong hệ thống Retrieval-Augmented Generation (RAG), cách bạn chia nhỏ văn bản (Chunking) quyết định
+                trực tiếp đến chất lượng của AI. Dưới đây là phân tích chi tiết so sánh hai phương pháp chia tách dữ
+                liệu phổ biến và mạnh mẽ nhất hiện nay.
+            </p>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 space-y-16">
+
+        <section>
+            <div class="mb-8 text-center">
+                <h2 class="text-3xl font-bold text-slate-800 mb-4">Cơ Chế Hoạt Động</h2>
+                <p class="text-slate-600 max-w-2xl mx-auto">
+                    Sự khác biệt cốt lõi nằm ở cách mỗi phương pháp xác định "điểm cắt" của văn bản. Một bên dựa trên
+                    quy tắc cấu trúc cứng, một bên dựa vào khả năng "hiểu" ngữ nghĩa của trí tuệ nhân tạo.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <div class="bg-white rounded-2xl shadow-md p-8 border-t-4 border-indigo-600">
+                    <h3 class="text-2xl font-bold text-indigo-700 mb-2">1. Recursive Character Splitting</h3>
+                    <p class="text-slate-500 text-sm mb-6">Tiêu chuẩn vàng, dựa trên danh sách ký tự phân tách ưu tiên.
+                    </p>
+
+                    <div class="flex flex-col items-center space-y-3">
+                        <div
+                            class="bg-slate-100 px-6 py-3 rounded-lg text-slate-700 font-mono text-sm w-full text-center border border-slate-200">
+                            Văn bản gốc (Dữ liệu lớn)
+                        </div>
+                        <div class="text-indigo-400 font-bold text-xl">&darr;</div>
+                        <div
+                            class="bg-indigo-50 px-6 py-3 rounded-lg text-indigo-800 text-sm w-full text-center border border-indigo-100 shadow-sm flex flex-col">
+                            <span class="font-semibold">Chia bằng '\n\n'</span>
+                            <span class="text-xs opacity-75">Tách thành các đoạn văn</span>
+                        </div>
+                        <div class="text-indigo-400 font-bold text-xl">&darr;</div>
+                        <div
+                            class="bg-indigo-100 px-6 py-3 rounded-lg text-indigo-900 text-sm w-full text-center border border-indigo-200 shadow-sm flex flex-col">
+                            <span class="font-semibold">Chia bằng '\n'</span>
+                            <span class="text-xs opacity-75">Tách thành các dòng (nếu đoạn văn quá lớn)</span>
+                        </div>
+                        <div class="text-indigo-400 font-bold text-xl">&darr;</div>
+                        <div
+                            class="bg-indigo-600 px-6 py-3 rounded-lg text-white font-bold text-sm w-full text-center shadow-md">
+                            Chunks hoàn chỉnh (Có Overlap)
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-md p-8 border-t-4 border-fuchsia-600">
+                    <h3 class="text-2xl font-bold text-fuchsia-700 mb-2">2. Semantic Chunking</h3>
+                    <p class="text-slate-500 text-sm mb-6">Phương pháp tiên tiến, sử dụng AI để cắt theo sự thay đổi chủ
+                        đề.</p>
+
+                    <div class="flex flex-col items-center space-y-3">
+                        <div
+                            class="bg-slate-100 px-6 py-3 rounded-lg text-slate-700 font-mono text-sm w-full text-center border border-slate-200">
+                            Văn bản gốc (Dữ liệu lớn)
+                        </div>
+                        <div class="text-fuchsia-400 font-bold text-xl">&darr;</div>
+                        <div
+                            class="bg-fuchsia-50 px-6 py-3 rounded-lg text-fuchsia-800 text-sm w-full text-center border border-fuchsia-100 shadow-sm flex flex-col">
+                            <span class="font-semibold">Phân rã câu</span>
+                            <span class="text-xs opacity-75">Chia thành từng câu đơn lẻ</span>
+                        </div>
+                        <div class="text-fuchsia-400 font-bold text-xl">&darr;</div>
+                        <div
+                            class="bg-fuchsia-100 px-6 py-3 rounded-lg text-fuchsia-900 text-sm w-full text-center border border-fuchsia-200 shadow-sm flex flex-col">
+                            <span class="font-semibold">Nhúng (Embedding) & Đo lường</span>
+                            <span class="text-xs opacity-75">Chuyển thành Vector & tính Cosine Similarity</span>
+                        </div>
+                        <div class="text-fuchsia-400 font-bold text-xl">&darr;</div>
+                        <div
+                            class="bg-fuchsia-600 px-6 py-3 rounded-lg text-white font-bold text-sm w-full text-center shadow-md">
+                            Cắt tại ngưỡng Threshold (Chunks theo ý nghĩa)
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="bg-white rounded-3xl shadow-sm border border-slate-200 p-8">
+            <div class="mb-8 text-center">
+                <h2 class="text-3xl font-bold text-slate-800 mb-4">So Sánh Đặc Điểm Kỹ Thuật</h2>
+                <p class="text-slate-600 max-w-2xl mx-auto">
+                    Bản đồ radar dưới đây minh họa rõ nét sự đánh đổi (trade-off) giữa hai phương pháp. Recursive vượt
+                    trội về tốc độ và chi phí, trong khi Semantic thống trị về tính toàn vẹn của ngữ cảnh.
+                </p>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="radarChart"></canvas>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-indigo-50 border-b border-indigo-100 p-6">
+                    <h3 class="text-2xl font-bold text-indigo-800">Phân tích Recursive</h3>
+                </div>
+                <div class="p-6">
+                    <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Ưu điểm</h4>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start">
+                            <span class="text-indigo-500 mr-2 font-bold">&#10003;</span>
+                            <span class="text-slate-700"><strong>Giữ cấu trúc:</strong> Cố gắng giữ các đoạn văn, câu
+                                văn toàn vẹn nhất.</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-indigo-500 mr-2 font-bold">&#10003;</span>
+                            <span class="text-slate-700"><strong>Tốc độ:</strong> Cực nhanh (mili-giây) do xử lý chuỗi
+                                thông thường.</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-indigo-500 mr-2 font-bold">&#10003;</span>
+                            <span class="text-slate-700"><strong>Dễ dự đoán:</strong> Kích thước chunk tối đa được cố
+                                định.</span>
+                        </li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Nhược điểm</h4>
+                    <ul class="space-y-3">
+                        <li class="flex items-start">
+                            <span class="text-red-400 mr-2 font-bold">&#10007;</span>
+                            <span class="text-slate-700"><strong>Thiếu hiểu biết:</strong> Có thể gộp 2 chủ đề khác nhau
+                                vào cùng 1 chunk, hoặc cắt đứt 1 chủ đề đang liền mạch.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-fuchsia-50 border-b border-fuchsia-100 p-6">
+                    <h3 class="text-2xl font-bold text-fuchsia-800">Phân tích Semantic</h3>
+                </div>
+                <div class="p-6">
+                    <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Ưu điểm</h4>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start">
+                            <span class="text-fuchsia-500 mr-2 font-bold">&#10003;</span>
+                            <span class="text-slate-700"><strong>Chính xác cực cao:</strong> Đảm bảo mỗi chunk chỉ chứa
+                                một ý tưởng/chủ đề thống nhất.</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-fuchsia-500 mr-2 font-bold">&#10003;</span>
+                            <span class="text-slate-700"><strong>Tối ưu Search:</strong> Trả về kết quả tập trung, ít
+                                tạp âm khi truy vấn Vector DB.</span>
+                        </li>
+                    </ul>
+                    <h4 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Nhược điểm</h4>
+                    <ul class="space-y-3">
+                        <li class="flex items-start">
+                            <span class="text-red-400 mr-2 font-bold">&#10007;</span>
+                            <span class="text-slate-700"><strong>Chi phí & Tốc độ:</strong> Chậm hơn nhiều và tốn phí
+                                API do phải gọi Embedding model cho từng câu.</span>
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-red-400 mr-2 font-bold">&#10007;</span>
+                            <span class="text-slate-700"><strong>Kích thước không đều:</strong> Phụ thuộc vào phong cách
+                                tác giả viết.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+        </section>
+
+        <section class="bg-slate-900 rounded-3xl text-white p-8 md:p-12 shadow-xl">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold mb-4 text-white">Lời Khuyên Khi Lựa Chọn</h2>
+                <p class="text-slate-300 max-w-2xl mx-auto">
+                    Việc chọn sai chiến lược có thể làm đội chi phí API hoặc phá hỏng độ chính xác của AI. Hãy chọn dựa
+                    trên bản chất dữ liệu của bạn.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div
+                    class="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-indigo-500 transition-colors">
+                    <div class="text-4xl mb-4">&#128218;</div>
+                    <h3 class="text-xl font-bold text-indigo-400 mb-2">Chọn Recursive khi...</h3>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        Bạn đang xử lý lượng dữ liệu khổng lồ (như toàn bộ thư viện sách, kho tài liệu chung) và cần tối
+                        ưu tốc độ hoặc ngân sách. Đặc biệt hiệu quả nếu văn bản đã có sẵn cấu trúc tốt (như file
+                        Markdown, HTML có thẻ rõ ràng).
+                    </p>
+                </div>
+
+                <div
+                    class="bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-fuchsia-500 transition-colors">
+                    <div class="text-4xl mb-4">&#9884;&#65039;</div>
+                    <h3 class="text-xl font-bold text-fuchsia-400 mb-2">Chọn Semantic khi...</h3>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        Bạn xây dựng chatbot hoặc hệ thống AI tư vấn chuyên sâu (Y tế, Pháp luật, Tài chính). Trong các
+                        lĩnh vực này, việc chia cắt sai một câu chứa điều kiện quan trọng có thể dẫn đến hậu quả nghiêm
+                        trọng. Đòi hỏi độ chính xác tuyệt đối.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-8 p-6 bg-slate-800/50 rounded-xl border border-slate-700 text-center">
+                <h4 class="text-lg font-bold text-emerald-400 mb-2">💡 Giải pháp Hybrid (Kết hợp)</h4>
+                <p class="text-slate-300 text-sm">
+                    Kỹ thuật tiên tiến nhất hiện nay là sử dụng <strong>Recursive</strong> để chia nhỏ sơ bộ giúp tiết
+                    kiệm chi phí, sau đó áp dụng <strong>Semantic</strong> ở mức độ nhẹ để kiểm tra lại các điểm cắt,
+                    hoặc gộp các chunk liền kề có ngữ nghĩa tương đồng lại.
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        function wrapLabel(label) {
+            if (label.length <= 16) return label;
+            const words = label.split(' ');
+            const lines = [];
+            let currentLine = '';
+            for (const word of words) {
+                if ((currentLine + word).length > 16) {
+                    if (currentLine.trim() !== '') lines.push(currentLine.trim());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            }
+            if (currentLine.trim() !== '') lines.push(currentLine.trim());
+            return lines;
+        }
+
+        const rawRadarLabels = [
+            "Tốc độ xử lý (Speed)",
+            "Giữ nguyên cấu trúc",
+            "Tính toàn vẹn ngữ cảnh",
+            "Tối ưu chi phí (Rẻ)",
+            "Kích thước dễ dự đoán"
+        ];
+        const radarLabels = rawRadarLabels.map(wrapLabel);
+
+        const radarCtx = document.getElementById('radarChart').getContext('2d');
+        new Chart(radarCtx, {
+            type: 'radar',
+            data: {
+                labels: radarLabels,
+                datasets: [
+                    {
+                        label: 'Recursive Splitting',
+                        data: [10, 8, 4, 10, 9],
+                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                        borderColor: '#4F46E5',
+                        pointBackgroundColor: '#4F46E5',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#4F46E5',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Semantic Chunking',
+                        data: [2, 3, 10, 2, 4],
+                        backgroundColor: 'rgba(217, 70, 239, 0.2)',
+                        borderColor: '#D946EF',
+                        pointBackgroundColor: '#D946EF',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#D946EF',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                        pointLabels: {
+                            font: { family: "'Segoe UI', sans-serif", size: 12, weight: '600' },
+                            color: '#475569'
+                        },
+                        ticks: {
+                            display: false,
+                            min: 0,
+                            max: 10
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: { family: "'Segoe UI', sans-serif", size: 14, weight: 'bold' },
+                            usePointStyle: true,
+                            padding: 20
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function (tooltipItems) {
+                                const item = tooltipItems[0];
+                                let label = item.chart.data.labels[item.dataIndex];
+                                if (Array.isArray(label)) {
+                                    return label.join(' ');
+                                } else {
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

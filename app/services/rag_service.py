@@ -1,19 +1,48 @@
+
+# anlyze query and return the relevant documents
+from asyncio.log import logger
+import json
 import os
-import logging
+
 from openai import OpenAI
 from qdrant_client import QdrantClient
-from qdrant_client.http import models
+from qdrant_client import models
 
-logger = logging.getLogger(__name__)
-
-# Khởi tạo các Client (Lấy cấu hình từ biến môi trường của Docker)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant_db:6333")
+QDRANT_URL = os.getenv("QDRANT_URL")
+COLLECTION_NAME = "ecommerce_products"
 
 ai_client = OpenAI(api_key=OPENAI_API_KEY)
-qdrant = QdrantClient(url=QDRANT_URL)
+qdrant = QdrantClient(QDRANT_URL)
 
-COLLECTION_NAME = "ecommerce_products"
+def analyze_query(query: str, category: str = None, max_price: float = None, top_k: int = 4):
+    # Dung LLM de phan tich cau hoi va tra ve cac tai lieu lien quan
+    analyzer_prompt = """Bạn là chuyên gia trích xuất dữ liệu. Hãy đọc câu hỏi và trả về ĐÚNG 1 ĐỊNH DẠNG JSON.
+        1. "category": "dien_tu" (điện thoại, tai nghe...), "thoi_trang" (quần áo, balo...), hoặc null nếu không rõ.
+        2. "max_price": CHÚ Ý - Phải dịch các từ chỉ tiền tệ sang số nguyên VNĐ.
+        - Ví dụ: "10 triệu", "10 củ" -> 10000000
+        - Ví dụ: "500k", "500 cành" -> 500000
+        - Ví dụ: "dưới 2 triệu" -> 2000000
+        - Nếu câu hỏi KHÔNG nhắc đến giới hạn giá tối đa -> null
+
+        Trả về duy nhất JSON, không thêm bất kỳ text nào khác.
+        """
+    try:
+        response = ai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": analyzer_prompt},
+                {"role": "user", "content": query}
+            ],
+            response_format={ "type": "json_object" }, # Ép OpenAI trả về định dạng JSON
+            temperature=0 # Để 0 để AI không sáng tạo lung tung
+        )
+        
+        extracted_data = json.loads(response.choices[0].message.content)
+        return extracted_data
+    except Exception as e:
+        logger.error(f"Lỗi phân tích query: {e}")
+        return {"category": None, "max_price": None}
 
 def retrieve_context(query: str, category: str = None, max_price: float = None, top_k: int = 4) -> str:
     """
@@ -58,7 +87,8 @@ def retrieve_context(query: str, category: str = None, max_price: float = None, 
             query_filter=search_filter,
             limit=top_k
         )
-        
+        print("Kết quả tìm kiếm từ Qdrant:", search_results)
+        # reranking result
         # 4. Trích xuất nội dung text từ các chunk tìm được
         if not search_results.points:
             return ""
@@ -66,8 +96,8 @@ def retrieve_context(query: str, category: str = None, max_price: float = None, 
         context_chunks = [
             {
                 "content": point.payload.get("content", ""),
-                "price": point.payload.get("price", 0),
-                "type": point.payload.get("type", "product_info"), # Lấy type để phân biệt
+                "price": point.payload.get("price") or point.payload.get("metadata", {}).get("price", 0),
+                "type": point.payload.get("type") or point.payload.get("metadata", {}).get("type", "product_info"),
                 "score": point.score,
                 "metadata": point.payload
             }
@@ -98,38 +128,6 @@ def retrieve_context(query: str, category: str = None, max_price: float = None, 
     except Exception as e:
         logger.error(f"❌ Lỗi khi truy xuất Qdrant: {e}")
         return ""
-import json
-
-def analyze_user_query(query: str) -> dict:
-    """
-    Dùng LLM để phân tích câu hỏi tự nhiên thành các bộ lọc có cấu trúc.
-    """
-    analyzer_prompt = """Bạn là chuyên gia trích xuất dữ liệu. Hãy đọc câu hỏi và trả về ĐÚNG 1 ĐỊNH DẠNG JSON.
-        1. "category": "dien_tu" (điện thoại, tai nghe...), "thoi_trang" (quần áo, balo...), hoặc null nếu không rõ.
-        2. "max_price": CHÚ Ý - Phải dịch các từ chỉ tiền tệ sang số nguyên VNĐ.
-        - Ví dụ: "10 triệu", "10 củ" -> 10000000
-        - Ví dụ: "500k", "500 cành" -> 500000
-        - Ví dụ: "dưới 2 triệu" -> 2000000
-        - Nếu câu hỏi KHÔNG nhắc đến giới hạn giá tối đa -> null
-
-        Trả về duy nhất JSON, không thêm bất kỳ text nào khác.
-        """
-    try:
-        response = ai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": analyzer_prompt},
-                {"role": "user", "content": query}
-            ],
-            response_format={ "type": "json_object" }, # Ép OpenAI trả về định dạng JSON
-            temperature=0 # Để 0 để AI không sáng tạo lung tung
-        )
-        
-        extracted_data = json.loads(response.choices[0].message.content)
-        return extracted_data
-    except Exception as e:
-        logger.error(f"Lỗi phân tích query: {e}")
-        return {"category": None, "max_price": None}
 
 def generate_answer_stream(query: str, category: str = None, max_price: float = None):
     """
@@ -137,6 +135,7 @@ def generate_answer_stream(query: str, category: str = None, max_price: float = 
     """
     # Bước 1: Rút trích ngữ cảnh từ Database
     context = retrieve_context(query, category, max_price)
+    print(f"Ngữ cảnh thu thập được:\n{context}")
     
     # Xử lý trường hợp database trống hoặc không tìm thấy sản phẩm phù hợp
     if not context:
